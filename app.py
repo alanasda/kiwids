@@ -7,62 +7,50 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# DADOS DE ENVIO
-EMAIL_REMETENTE = "ferreiramateuss000@gmail.com"
-SENHA_APP = "yvsdhnqamzqkhmay"  # Senha de app do Gmail
+REMETENTE = "ferreiramateuss000@gmail.com"
+SENHA_APP = "yvsdhnqamzqkhmay"  # Senha de app gerada no Gmail
 
-# FUNÇÃO DE ENVIO DE E-MAIL
-def enviar_email(email_destino, senha_gerada):
-    corpo_email = f"""\
-Assunto: Acesso à Plataforma 🌐
+def enviar_email(email_cliente, senha):
+    mensagem = f"""\ 
+Assunto: Acesso à Plataforma
 
-Olá! Obrigado pela sua compra 🛒
+Olá! Obrigado pela compra. Aqui estão seus dados de acesso:
 
-Aqui estão seus dados de acesso:
-
-📧 E-mail: {email_destino}
-🔐 Senha: {senha_gerada}
-🌍 Plataforma: https://seudominio.com
-
-Aproveite!
+🌐 Plataforma: https://seudominio.com
+📧 E-mail: {email_cliente}
+🔑 Senha: {senha}
 """
 
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
-            smtp.starttls()
-            smtp.login(EMAIL_REMETENTE, SENHA_APP)
-            smtp.sendmail(EMAIL_REMETENTE, email_destino, corpo_email.encode("utf-8"))
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(REMETENTE, SENHA_APP)
+            server.sendmail(REMETENTE, email_cliente, mensagem.encode("utf-8"))
         return True
-    except Exception as erro:
-        print("Erro ao enviar e-mail:", erro)
+    except Exception as e:
+        print(f"Erro ao enviar e-mail: {e}")
         return False
 
 @app.route("/")
 def home():
-    return "🟢 API da Kiwify está rodando com sucesso!"
+    return "🟢 API da Plataforma Kiwify está online!"
 
-# ENDPOINT PARA WEBHOOK
 @app.route("/webhook_kiwify", methods=["POST"])
 def webhook_kiwify():
     dados = request.get_json()
-    print("Recebido:", dados)
+    evento = dados.get("event")
+    email_cliente = dados.get("data", {}).get("email")
 
-    try:
-        status = dados["status"]
-        email_cliente = dados["customer"]["email"]
-    except Exception as e:
-        return jsonify({"erro": "Dados inválidos no webhook"}), 400
+    if evento == "pix_generated" and email_cliente:
+        senha_gerada = str(random.randint(10000, 99999))
+        sucesso = enviar_email(email_cliente, senha_gerada)
 
-    if status == "approved" and email_cliente:
-        senha = str(random.randint(10000, 99999))
-        sucesso = enviar_email(email_cliente, senha)
         if sucesso:
-            return jsonify({"mensagem": "E-mail enviado com sucesso"}), 200
+            return jsonify({"mensagem": "E-mail enviado com sucesso!", "email": email_cliente, "senha": senha_gerada}), 200
         else:
-            return jsonify({"erro": "Falha ao enviar e-mail"}), 500
+            return jsonify({"erro": "Erro ao enviar o e-mail"}), 500
     else:
-        return jsonify({"erro": "Status diferente de aprovado ou e-mail ausente"}), 400
+        return jsonify({"erro": "Evento não tratado ou dados incompletos"}), 400
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
